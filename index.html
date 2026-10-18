@@ -1,3 +1,11 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+</head>
+<body>
 <title>Olympic Road</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,6 +50,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 32px}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
@@ -325,7 +334,7 @@ table.logtbl{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640p
     <canvas id="logoSprite" width="36" height="48" aria-hidden="true" style="width:36px;height:48px"></canvas>
     <div><h1>Olympic Road <span style="font-weight:500;color:var(--muted);font-size:.7em">奧運之路</span></h1><p>Sports nutrition board game · NTNU Gongguan · 運動營養大富翁 · prototype v0.8</p></div>
   </div>
-  <div class="top-actions"><button class="btn ghost" id="btnHelp" type="button">How to play 玩法</button><button class="btn ghost" id="btnData" type="button">Data 數據</button><button class="btn ghost" id="btnNew" type="button">New game 新遊戲</button></div>
+  <div class="top-actions"><button class="btn ghost" id="btnHelp" type="button">How to play 玩法</button><button class="btn ghost" id="btnData" type="button" hidden>Data 數據</button><button class="btn ghost" id="btnNew" type="button">New game 新遊戲</button></div>
 </header>
 
 <main id="setup" class="wrap">
@@ -1005,12 +1014,23 @@ function syncText(){
     error:["Cloud save failed to start: download the CSV at the end.","雲端儲存啟動失敗：結束時請下載 CSV。"], boot:["Checking auto-save…","檢查自動儲存中…"] }[SYNC.why]||["Results stay on this device.","結果只存在這台裝置。"];
   return {cls:"off", en:"Auto-save to teacher: OFF · "+why[0], zh:"自動存給老師：關閉 · "+why[1]};
 }
+/* Teacher tools (Data button, sync status, exports) are hidden from players. They show for the artifact owner/editor on claude.ai,
+   or on a self-hosted copy when the address ends with #teacher  (e.g. https://…/olympic-road/#teacher). */
+function teacherUI(){ return /teacher/i.test(location.hash||"") || /[?&]teacher/i.test(location.search||"") || SYNC.owner || SYNC.admin; }
+function renderTeacherUI(){ const t=teacherUI(); const d=$("#btnData"); if(d) d.hidden=!t; return t; }
+window.addEventListener("hashchange", ()=>{ renderTeacherUI(); renderSync(); });
 function renderSync(){
-  const b=$("#syncBadge"); if(b){ const t=syncText(); b.className="continue sync "+t.cls; b.hidden=false; b.innerHTML=`<span><span class="dot"></span>${esc(t.en)}<span class="zh">${esc(t.zh)}</span></span>`; }
+  const T=renderTeacherUI();
+  const b=$("#syncBadge"); if(b){ const t=syncText(); b.className="continue sync "+t.cls; b.hidden=!T; b.innerHTML=`<span><span class="dot"></span>${esc(t.en)}<span class="zh">${esc(t.zh)}</span></span>`; }
   $$(".syncstat[data-id]").forEach(el=>{ const st=loadSyncState(); const id=el.dataset.id; const s=st.sent[id]; const w=st.pending.includes(id);
     el.className="syncstat "+(s&&!w?"ok":"wait"); el.textContent=s&&!w?`✓ sent 已送出 ${new Date(s.at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`:(w&&SYNC.mode!=="none"?"… sending 送出中":(SYNC.mode==="none"?"on device only 僅此裝置":"–")); });
   const r=$("#resultSync"); if(r){ const st=loadSyncState(); const s=G&&st.sent[G.id]&&!st.pending.includes(G.id);
     r.className="badge"; r.style.background=s?"var(--good)":(SYNC.mode==="none"?"var(--warn)":"var(--fg)"); r.textContent=s?"Sent to teacher ✓ 已送出給老師":(SYNC.mode==="none"?"Not sent: download CSV 未送出，請下載 CSV":"Sending… 送出中"); }
+  /* Players see nothing about saving when auto-save works. Only when it cannot work on this device (claude.ai viewer outside
+     the organisation, or no UPLOAD_URL) do they get the download button so the season is not lost. */
+  const row=$("#resultSyncRow"); if(row) row.hidden=!(T||SYNC.mode==="none");
+  const mine=$("#btnMine"); if(mine) mine.hidden=!(T||SYNC.mode==="none");
+  ["#btnData2","#btnCopy"].forEach(s=>{ const el=$(s); if(el) el.hidden=!T; });
 }
 function queueSeason(snap){ if(!snap) return; const st=loadSyncState(); if(!st.pending.includes(snap.id)) st.pending.push(snap.id); saveSyncState(st); renderSync(); flushSync(); }
 function queueAll(){ const st=loadSyncState(); allSeasons().forEach(s=>{ if(!st.pending.includes(s.id)) st.pending.push(s.id); }); saveSyncState(st); renderSync(); flushSync(); }
@@ -1726,8 +1746,8 @@ function endGame(){
   $("#results").innerHTML=`<div><h2>Season results <span class="zh" style="display:inline">賽季結果</span></h2><p class="lede">Ranked by Olympic form. The learning log is what the teacher sees: which limits each athlete ran into, supplement spend by evidence group, and the risky choices made.<span class="zh">依狀態排名。學習紀錄是老師看的：每位選手撞到哪些限制、各證據等級的補充品花費、以及冒險的選擇。</span></p></div>
     <div class="podium">${cards}</div>
     <section class="panel" style="margin-top:0"><h3>Learning log 學習紀錄</h3><div class="tablewrap"><table class="logtbl"><thead><tr><th>Athlete 選手</th><th>Quiz 答題</th><th>Sessions 訓練</th><th>Substrate 基質限制</th><th>Fluid 水分限制</th><th>Under-recovered 恢復不足</th><th>Low specificity 非專項</th><th>Spend A / B / C / D</th><th>Risky choices 冒險</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 4px"><span class="badge" id="resultSync">…</span><small class="muted" id="resultSyncHint"></small></div>
-    <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btnMine" type="button">Download this season CSV 下載本季 CSV</button><button class="btn" id="btnData2" type="button">Teacher view & export 教師檢視／匯出</button><button class="btn" id="btnCopy" type="button">Copy summary JSON 複製摘要</button><button class="btn primary" id="btnAgain" type="button">New season 新賽季</button></div></section>`;
+    <div id="resultSyncRow" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 4px" hidden><span class="badge" id="resultSync">…</span><small class="muted" id="resultSyncHint"></small></div>
+    <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btnMine" type="button" hidden>Download this season CSV 下載本季 CSV</button><button class="btn" id="btnData2" type="button" hidden>Teacher view & export 教師檢視／匯出</button><button class="btn" id="btnCopy" type="button" hidden>Copy summary JSON 複製摘要</button><button class="btn primary" id="btnAgain" type="button">New season 新賽季</button></div></section>`;
   $("#game").hidden=true; $("#results").hidden=false; window.scrollTo({top:0});
   G.players.forEach(p=>{ const c=$(`canvas[data-ep="${p.i}"]`); const sel=p.form>=RULES.selectForm||(p.trial&&p.trial.rank===1); if(c) animate(c, sel?ATH.cheer:ATH.idle, palFor(p), 3, 400, null); });
   $("#btnAgain").addEventListener("click", ()=>{ clearSave(); G=null; showSetup(); });
@@ -1812,3 +1832,5 @@ function start(data){
 if(window.claude && window.claude.hot){ window.claude.hot.snapshot(()=>({G})); }
 (window.claude && window.claude.hot && window.claude.hot.ready) ? window.claude.hot.ready(start) : start(window.claude && window.claude.hot ? window.claude.hot.data : null);
 </script>
+</body>
+</html>
